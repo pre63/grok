@@ -1,12 +1,10 @@
-import datetime
 import hashlib
 import json
 import os
-import uuid
+from operator import itemgetter
 
 import boto3
 import jwt
-import requests
 from botocore.exceptions import ClientError
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
@@ -14,8 +12,8 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key")  # Set in env
-S3_BUCKET = os.environ.get("S3_BUCKET", "grok-for-poor-people")
+SECRET_KEY = os.environ.get("SECRET_KEY", "a-very-long-secret-key-at-least-32-bytes-long-for-security")  # Longer default
+S3_BUCKET = os.environ.get("S3_BUCKET", "xai-chatbot-chats")  # Default bucket name
 XAI_API_KEY = os.environ.get("XAI_API_KEY")  # xAI API key from env
 USERNAME = os.environ.get("USERNAME", "user")  # Fixed username from env
 PASSWORD = os.environ.get("PASSWORD")  # Plain password from env, will hash
@@ -73,18 +71,24 @@ def list_chats():
   except:
     return jsonify({"error": "Invalid token"}), 401
 
-  response = s3.list_objects_v2(Bucket=S3_BUCKET, Delimiter="/")
-  chats = {}
-  for obj in response.get("Contents", []):
-    if obj["Key"].endswith(".json"):
-      chat_id = obj["Key"].replace(".json", "")
-      obj_data = s3.get_object(Bucket=S3_BUCKET, Key=obj["Key"])
-      chat_data = json.loads(obj_data["Body"].read())
-      chats[chat_id] = {"title": chat_data.get("title", "Untitled")}
-  return jsonify(chats)
+  try:
+    response = s3.list_objects_v2(Bucket=S3_BUCKET, Delimiter="/")
+    chat_list = []
+    for obj in response.get("Contents", []):
+      if obj["Key"].endswith(".json"):
+        chat_id = obj["Key"].replace(".json", "")
+        obj_data = s3.get_object(Bucket=S3_BUCKET, Key=obj["Key"])
+        chat_data = json.loads(obj_data["Body"].read())
+        chat_list.append({"id": chat_id, "title": chat_data.get("title", "Untitled"), "last_modified": obj["LastModified"].isoformat()})
+    # Sort by last_modified descending
+    chat_list.sort(key=itemgetter("last_modified"), reverse=True)
+    return jsonify(chat_list)
+  except ClientError as e:
+    app.logger.error(f"Error listing chats: {e}")
+    return jsonify({"error": "Failed to list chats"}), 500
 
 
-@app.route("/chat/<chat_id>", methods=["GET", "POST"])
+@app.route("/chat/<chat_id>", methods=["GET", "POST", "DELETE"])
 def handle_chat(chat_id):
   token = request.headers.get("Authorization", "").replace("Bearer ", "")
   try:
@@ -99,13 +103,28 @@ def handle_chat(chat_id):
     try:
       obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
       return jsonify(json.loads(obj["Body"].read()))
-    except ClientError:
-      return jsonify({"messages": []})
+    except ClientError as e:
+      if e.response["Error"]["Code"] == "NoSuchKey":
+        return jsonify({"messages": []})
+      app.logger.error(f"Error getting chat: {e}")
+      return jsonify({"error": "Failed to get chat"}), 500
 
   elif request.method == "POST":
     data = request.json
-    s3.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(data))
-    return jsonify({"success": True})
+    try:
+      s3.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(data))
+      return jsonify({"success": True})
+    except ClientError as e:
+      app.logger.error(f"Error saving chat: {e}")
+      return jsonify({"error": "Failed to save chat"}), 500
+
+  elif request.method == "DELETE":
+    try:
+      s3.delete_object(Bucket=S3_BUCKET, Key=key)
+      return jsonify({"success": True})
+    except ClientError as e:
+      app.logger.error(f"Error deleting chat: {e}")
+      return jsonify({"error": "Failed to delete chat"}), 500
 
 
 if __name__ == "__main__":

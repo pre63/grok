@@ -117,10 +117,25 @@
             border-radius: var(--border-radius);
             margin-bottom: 10px;
             background-color: var(--tertiary-bg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .chat-history li:hover {
             background-color: var(--hover-bg);
+        }
+
+        .delete-btn {
+            background: transparent;
+            border: none;
+            color: var(--primary-text);
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .delete-btn:hover {
+            color: red;
         }
 
         .chat-root {
@@ -334,7 +349,12 @@
 <body>
     <div class="chat-container">
         <div class="sidebar">
-            <button class="new-chat-btn button" id="newChatBtn">New Chat</button>
+            <button class="new-chat-btn button" id="newChatBtn">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                </svg>
+                New Chat
+            </button>
             <ul class="chat-history" id="chatHistory"></ul>
         </div>
         <div class="chat-root">
@@ -359,12 +379,11 @@
                     Think Harder
                 </button>
                 <select id="modelSelect" class="model-select">
-                  <option value="grok-4-1-fast-reasoning">Fast</option>
-                  <option value="grok-4-1-fast-non-reasoning">Fast Non-Reasoning</option>
+                    <option value="grok-4-1-fast-reasoning">Fast</option>
+<option value="grok-4-1-fast-non-reasoning">Fast Non-Reasoning</option>
                   <option value="grok-code-fast-1">Code</option>
-                  <option value="grok-4-0709">Expert</option>
-                  <option value="grok-3">Advanced Expert (Premium)</option>
-              </select>
+                    <option value="grok-4-0709">Expert</option>
+                </select>
             </div>
             <div class="chat-input-container">
                 <div class="chat-input-div">
@@ -410,7 +429,7 @@
         let conversation = [];
         let lastUserMessage = null;
         let currentChatId = null;
-        let chats = {};
+        let chats = [];
 
         // Persist model selection
         modelSelect.value = localStorage.getItem('selectedModel') || 'grok-4-1-fast-reasoning';
@@ -470,12 +489,41 @@
             });
             if (response.ok) {
                 chats = await response.json();
-                Object.keys(chats).forEach(chatId => {
+                chats.forEach(chat => {
                     const li = document.createElement('li');
-                    li.textContent = chats[chatId].title || 'Untitled Chat';
-                    li.onclick = () => loadChat(chatId);
+                    const titleSpan = document.createElement('span');
+                    titleSpan.textContent = chat.title || 'Untitled Chat';
+                    titleSpan.onclick = () => loadChat(chat.id);
+                    li.appendChild(titleSpan);
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.classList.add('delete-btn');
+                    const deleteSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    deleteSvg.setAttribute("viewBox", "0 0 24 24");
+                    deleteSvg.setAttribute("width", "16");
+                    deleteSvg.setAttribute("height", "16");
+                    deleteSvg.innerHTML = '<path d="M3 6h18v2H3V6zm3 3h12v12a2 2 0 01-2 2H8a2 2 0 01-2-2V9zm3-6h6v2H9V3z" fill="currentColor"/>';
+                    deleteBtn.appendChild(deleteSvg);
+                    deleteBtn.onclick = () => deleteChat(chat.id);
+                    li.appendChild(deleteBtn);
                     chatHistory.appendChild(li);
                 });
+            }
+        }
+
+        async function deleteChat(chatId) {
+            if (!confirm('Are you sure you want to delete this chat?')) return;
+            const token = localStorage.getItem('jwt');
+            const response = await fetch(`/chat/${chatId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                if (currentChatId === chatId) {
+                    newChat();
+                }
+                loadChatHistory();
+            } else {
+                alert('Failed to delete chat');
             }
         }
 
@@ -495,12 +543,12 @@
             }
         }
 
-        async function saveChat() {
+        async function saveChat(title = null) {
             if (!currentChatId) {
                 currentChatId = Date.now().toString();
             }
-            const title = conversation[0]?.content.substring(0, 30) + '...' || 'Untitled Chat';
-            const data = { title, messages: conversation };
+            const defaultTitle = conversation[0]?.content.substring(0, 30) + '...' || 'Untitled Chat';
+            const data = { title: title || defaultTitle, messages: conversation };
             const token = localStorage.getItem('jwt');
             await fetch(`/chat/${currentChatId}`, {
                 method: 'POST',
@@ -508,6 +556,18 @@
                 body: JSON.stringify(data)
             });
             loadChatHistory();
+        }
+
+        async function generateChatTitle(userMessage, grokResponse) {
+            const messagesForTitle = [
+                { role: 'system', content: 'You are a helpful AI. Suggest a short, descriptive title for this conversation.' },
+                { role: 'user', content: `User: ${userMessage}\nGrok: ${grokResponse}` }
+            ];
+            let title = '';
+            await streamApi(messagesForTitle, modelSelect.value, 0.7, 64, delta => {
+                title += delta;
+            });
+            return title.trim().replace(/["']/g, '');
         }
 
         async function newChat() {
@@ -806,9 +866,17 @@
 
                 conversation.push({ role: 'user', content: question });
                 conversation.push({ role: 'assistant', content: fullResponse });
-                saveChat();
+
+                // If this is the first response in a new chat, generate title
+                if (conversation.length === 2 && !currentChatId) {
+                    const suggestedTitle = await generateChatTitle(question, fullResponse);
+                    saveChat(suggestedTitle);
+                } else {
+                    saveChat();
+                }
             } catch (error) {
-                appendMessage('Error', 'Failed to get response. Please try again.');
+                // stringyfy error message
+                appendMessage('Error',  JSON.stringify(error)|| 'An error occurred');
             }
         }
 
