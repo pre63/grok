@@ -1,6 +1,5 @@
 .venv
 .env
-index.html
 __pycache__
-.github/workflows/fly-deploy.yml
+.github
 fly.toml
