@@ -2,3 +2,5 @@
 .env
 index.html
 __pycache__
+.github/workflows/fly-deploy.yml
+fly.toml

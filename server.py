@@ -32,6 +32,16 @@ s3 = boto3.client("s3", aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_k
 HASHED_PASSWORD = hashlib.sha256(PASSWORD.encode()).hexdigest() if PASSWORD else None
 
 
+@app.route("/manifest.json")
+def manifest():
+  return send_file("docs/manifest.json", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def service_worker():
+  return send_file("docs/sw.js", mimetype="application/javascript")
+
+
 def hash_password(password):
   return hashlib.sha256(password.encode()).hexdigest()
 
@@ -42,7 +52,7 @@ def generate_id():
 
 @app.route("/")
 def serve_html():
-  return send_file("index.html")
+  return send_file("docs/index.html")
 
 
 @app.route("/login", methods=["POST"])
@@ -268,4 +278,9 @@ def chat_completions():
 
 
 if __name__ == "__main__":
-  app.run(debug=True)
+  from waitress import serve
+
+  if os.environ.get("DEV"):
+    app.run(debug=True)
+  else:
+    serve(app, host="0.0.0.0", port=5000)

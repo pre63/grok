@@ -31,7 +31,7 @@ fix:
 	black .
 
 serve: fix
-	@echo "Starting HTTP server at http://localhost:7070"
+	@echo "Starting HTTP server at http://127.0.0.1:5000/"
 	@. .venv/bin/activate; \
 	. .env && \
-	PYTHONPATH=. python -m server
+	PYTHONPATH=. DEV=1 python -m server
