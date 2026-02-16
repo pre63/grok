@@ -1,0 +1,9 @@
+# requirements.txt
+flask
+flask-cors
+pyjwt
+boto3
+isort
+black
+git+https://github.com/pre63/black.git
+requests
