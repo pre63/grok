@@ -18,6 +18,8 @@
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
   <!-- Mermaid for diagrams -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <!-- DOMPurify for sanitizing HTML -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
   <style>
     /* Root variables inspired by Grok dark theme */
     :root {
@@ -814,7 +816,8 @@
         i = j
       }
 
-      element.innerHTML = markdownToHtml(result)
+      const html = markdownToHtml(result)
+      element.innerHTML = DOMPurify.sanitize(html)
 
       // Highlight code blocks
       element.querySelectorAll('pre code').forEach(block => {

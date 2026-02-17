@@ -4,6 +4,7 @@ import os
 import random
 import string
 import time
+from datetime import datetime, timedelta
 from operator import itemgetter
 
 import boto3
@@ -55,6 +56,7 @@ def serve_html():
   return send_file("docs/index.html")
 
 
+# In /login route, replace the token generation:
 @app.route("/login", methods=["POST"])
 def login():
   data = request.json
@@ -64,7 +66,8 @@ def login():
   if username != USERNAME or password != HASHED_PASSWORD:
     return jsonify({"error": "Invalid credentials"}), 401
 
-  token = jwt.encode({"username": USERNAME}, SECRET_KEY)
+  payload = {"username": USERNAME, "exp": datetime.utcnow() + timedelta(minutes=60 * 24 * 365)}
+  token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
   return jsonify({"token": token})
 
 
