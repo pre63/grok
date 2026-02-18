@@ -25,13 +25,15 @@
     :root {
       --primary-text: #ffffff;
       --secondary-text: #6b6b6b;
-      --primary-bg: #141414;
-      --secondary-bg: #212121;
-      --tertiary-bg: #2a2a2a;
+      --primary-bg: rgb(5, 5, 5);
+      --secondary-bg: rgb(25, 25, 25);
+      --tertiary-bg: rgb(5, 5, 5);
       --accent: #40e0d0;
+      --border: #333333;
       /* Turquoise accent from Grok examples */
       --hover-bg: #1f2937;
-      --border-radius: 12px;
+      --border-radius: 20px;
+      --border-radius-plus: 40px;
     }
 
     /* Button styles adapted */
@@ -80,7 +82,7 @@
     body {
       margin: 0;
       padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      font-family: universalSans, Inter, Roboto, "Open Sans", Arial, sans-serif, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
       background-color: var(--primary-bg);
       color: var(--primary-text);
       display: flex;
@@ -99,10 +101,9 @@
 
     .sidebar {
       width: 250px;
-      background-color: var(--secondary-bg);
       padding: 20px;
       overflow-y: auto;
-      border-right: 1px solid var(--tertiary-bg);
+      border-right: 1px solid var(--border);
       border-top-left-radius: var(--border-radius);
       border-bottom-left-radius: var(--border-radius);
     }
@@ -164,17 +165,19 @@
     .chat-toolbar {
       padding: 10px;
       background: var(--primary-bg);
-      border-top: 1px solid var(--tertiary-bg);
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       align-items: center;
+      justify-content: center;
     }
 
     .chat-input-container {
-      padding: 20px;
+      margin: 20px;
+      padding: 0 20px 0 0;
       background: var(--secondary-bg);
-      border-top: 1px solid var(--tertiary-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius-plus);
     }
 
     .chat-input-div {
@@ -184,8 +187,9 @@
 
     .chat-input {
       flex: 1;
-      min-height: 40px;
       max-height: 300px;
+      padding: 16px 8px;
+      margin: 10px 20px;
       border: none;
       background: transparent;
       color: var(--primary-text);
@@ -223,6 +227,21 @@
 
     .message:hover .message-actions {
       opacity: 1;
+    }
+
+
+    .message.user {
+      padding-left:20%;
+    }
+
+    .message.user pre{
+      justify-content: flex-end;
+      align-items: flex-end;
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius);
+      border-bottom-right-radius: 6px;
+      background-color: var(--secondary-bg);
+      margin:40px;
     }
 
     .action-icon {
@@ -286,8 +305,9 @@
 
     .pre code {
       background-color: var(--secondary-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--border-radius);
       padding: 2px 4px;
-      border-radius: 4px;
       white-space: pre-wrap;
       word-wrap: break-word;
     }
@@ -490,7 +510,7 @@
           })
       })
     }
-    
+
     mermaid.initialize({ startOnLoad: false })
 
     const messagesDiv = document.getElementById('messages')
@@ -1024,8 +1044,31 @@
       if (lastUserMessage) {
         sendMessage(lastUserMessage, 'grok-4-0709')
       }
-    };
+    }
+
+
+    // force anchor in content bubble to alwasy target _blank
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            node.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'))
+          }
+        })
+      })
+    })
+    observer.observe(messagesDiv, { childList: true, subtree: true })
   </script>
+  <style>
+    * {
+      font-family: universalSans, Inter, Roboto, "Open Sans", Arial, sans-serif, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+  </style>
 </body>
 
 </html>

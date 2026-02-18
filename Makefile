@@ -25,10 +25,10 @@ venv:
 install: venv create-env
 
 fix:
-	# isot and black
 	@. .venv/bin/activate; \
 	isort . && \
-	black .
+	black . && \
+	nfmt .
 
 serve: fix
 	@echo "Starting HTTP server at http://127.0.0.1:5000/"
