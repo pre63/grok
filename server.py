@@ -10,7 +10,7 @@ from operator import itemgetter
 import boto3
 import jwt
 from botocore.exceptions import ClientError
-from flask import Flask, Response, jsonify, request, send_file
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from xai_sdk import Client
 from xai_sdk.chat import assistant, system, tool, user
@@ -33,14 +33,9 @@ s3 = boto3.client("s3", aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_k
 HASHED_PASSWORD = hashlib.sha256(PASSWORD.encode()).hexdigest() if PASSWORD else None
 
 
-@app.route("/manifest.json")
-def manifest():
-  return send_file("docs/manifest.json", mimetype="application/manifest+json")
-
-
-@app.route("/sw.js")
-def service_worker():
-  return send_file("docs/sw.js", mimetype="application/javascript")
+@app.route("/<path:filename>")
+def serve_docs(filename):
+  return send_from_directory("docs", filename)
 
 
 def hash_password(password):
@@ -56,7 +51,6 @@ def serve_html():
   return send_file("docs/index.html")
 
 
-# In /login route, replace the token generation:
 @app.route("/login", methods=["POST"])
 def login():
   data = request.json
@@ -128,7 +122,7 @@ def handle_chat(chat_id):
       if e.response["Error"]["Code"] == "NoSuchKey":
         return jsonify({"messages": []})
       app.logger.error(f"Error getting chat: {e}")
-      return jsonify({"error": "Failed to get chat"}), 500
+      return jupytext({"error": "Failed to get chat"}), 500
 
   elif request.method == "POST":
     data = request.json
@@ -163,41 +157,41 @@ def chat_completions():
   model = data.get("model", "grok-4-1-fast-reasoning")
   temperature = data.get("temperature", 0.7)
   max_tokens = data.get("max_tokens", 8192)
-  stream = data.get("stream", True)
+  stream = data.get("stream", False)  # Default to False for non-streaming
   use_tools = data.get("use_tools", True)
 
-  def stream_response():
-    client = Client(api_key=XAI_API_KEY)
-    tools_list = (
-      [
-        web_search(),
-        x_search(),
-        code_execution(),
-      ]
-      if use_tools
-      else []
-    )
-    chat = client.chat.create(model=model, temperature=temperature, max_tokens=max_tokens, tools=tools_list, include=["verbose_streaming"])
+  client = Client(api_key=XAI_API_KEY)
+  tools_list = (
+    [
+      web_search(),
+      x_search(),
+      code_execution(),
+    ]
+    if use_tools
+    else []
+  )
+  chat = client.chat.create(model=model, temperature=temperature, max_tokens=max_tokens, tools=tools_list, include=["verbose_streaming"], store_messages=True)
 
-    for msg in messages:
-      role = msg.get("role")
-      content = msg.get("content")
-      if role == "system":
-        chat.append(system(content))
-      elif role == "user":
-        chat.append(user(content))
-      elif role == "assistant":
-        chat.append(assistant(content))
-      elif role == "tool":
-        chat.append(tool(tool_call_id=msg.get("tool_call_id"), name=msg.get("name"), content=content))
+  for msg in messages:
+    role = msg.get("role")
+    content = msg.get("content")
+    if role == "system":
+      chat.append(system(content))
+    elif role == "user":
+      chat.append(user(content))
+    elif role == "assistant":
+      chat.append(assistant(content))
+    elif role == "tool":
+      chat.append(tool(tool_call_id=msg.get("tool_call_id"), name=msg.get("name"), content=content))
 
-    cmpl_id = generate_id()
-    created = int(time.time())
+  cmpl_id = generate_id()
+  created = int(time.time())
 
-    while True:
+  if stream:
+
+    def stream_response():
       tool_calls_buffer = []
       content_buffer = ""
-      citations = None
 
       for response, chunk in chat.stream():
         chunk_data = {
@@ -227,57 +221,65 @@ def chat_completions():
           content_buffer += chunk.content
           delta["content"] = chunk.content
 
-        if hasattr(response, "citations"):
-          citations = response.citations
-
         yield f"data: {json.dumps(chunk_data)}\n\n"
 
-      # After stream ends, send final chunk with finish_reason
+      # Final chunk with finish_reason
       finish_reason = "tool_calls" if tool_calls_buffer else "stop"
-      chunk_data = {
+      final_chunk_data = {
         "id": cmpl_id,
         "object": "chat.completion.chunk",
         "created": created,
         "model": model,
         "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
       }
-      yield f"data: {json.dumps(chunk_data)}\n\n"
+      yield f"data: {json.dumps(final_chunk_data)}\n\n"
+      yield "data: [DONE]\n\n"
 
-      if finish_reason != "tool_calls":
-        break
+    return Response(stream_response(), mimetype="text/event-stream")
 
-      # Append assistant message
-      if tool_calls_buffer:
-        if content_buffer:
-          chat.append(assistant(content_buffer))
-        chat.append(assistant(tool_calls=tool_calls_buffer))
-      else:
-        chat.append(assistant(content_buffer))
+  else:
+    # Non-streaming: Collect full response
+    tool_calls = []
+    content = ""
+    citations = None
 
-      # Execute tools
-      for tc in tool_calls_buffer:
-        function_name = tc["function"]["name"]
-        try:
-          args = json.loads(tc["function"]["arguments"])
-        except json.JSONDecodeError:
-          content = "Invalid arguments provided."
-        else:
-          try:
-            if function_name == web_search.name:
-              content = web_search(**args)
-            elif function_name == x_search.name:
-              content = x_search(**args)
-            elif function_name == code_execution.name:
-              content = code_execution(**args)
-            else:
-              content = "Unknown tool."
-          except Exception as e:
-            content = f"Tool execution error: {str(e)}"
-        chat.append(tool(tool_call_id=tc["id"], name=function_name, content=json.dumps(content) if not isinstance(content, str) else content))
+    for response, chunk in chat.stream():  # Still use stream under the hood for consistency
+      if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+        for tc in chunk.tool_calls:
+          tc_index = next((i for i, b in enumerate(tool_calls) if b["id"] == tc.id), len(tool_calls))
+          if tc_index == len(tool_calls):
+            tool_calls.append({"id": tc.id if tc.id else generate_id("call_"), "type": "function", "function": {"name": "", "arguments": ""}})
+          if tc.function.name:
+            tool_calls[tc_index]["function"]["name"] += tc.function.name
+          if tc.function.arguments:
+            tool_calls[tc_index]["function"]["arguments"] += tc.function.arguments
 
-    yield "data: [DONE]\n\n"
+      if hasattr(chunk, "content") and chunk.content:
+        content += chunk.content
 
-  return Response(stream_response(), mimetype="text/event-stream")
+      if hasattr(response, "citations"):
+        citations = response.citations
+
+    finish_reason = "tool_calls" if tool_calls else "stop"
+    response_data = {
+      "id": cmpl_id,
+      "object": "chat.completion",
+      "created": created,
+      "model": model,
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": content if not tool_calls else None,
+            "tool_calls": tool_calls if tool_calls else None,
+          },
+          "finish_reason": finish_reason,
+        }
+      ],
+      "usage": {},  # xAI SDK may not provide usage; add if available
+    }
+    return jsonify(response_data)
 
 
 if __name__ == "__main__":

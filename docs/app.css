@@ -1,0 +1,634 @@
+/* 1. Use a more-intuitive box-sizing model */
+*, *::before, *::after {
+  box-sizing: border-box;
+  outline: none;
+}
+
+/* 2. Remove default margin */
+*:not(dialog) {
+  margin: 0;
+}
+
+/* 3. Enable keyword animations */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    interpolate-size: allow-keywords;
+  }
+}
+
+body {
+  /* 4. Add accessible line-height */
+  line-height: 1.5;
+  /* 5. Improve text rendering */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 6. Improve media defaults */
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* 7. Inherit fonts for form controls */
+input, button, textarea, select {
+  font: inherit;
+}
+
+/* 8. Avoid text overflows */
+p, h1, h2, h3, h4, h5, h6 {
+  overflow-wrap: break-word;
+}
+
+/* 9. Improve line wrapping */
+p {
+  text-wrap: pretty;
+}
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+}
+
+/*
+  10. Create a root stacking context
+*/
+#root, #__next {
+  isolation: isolate;
+}
+
+/* Root variables inspired by Grok dark theme */
+:root {
+  --primary-text: #ffffff;
+  --secondary-text: #6b6b6b;
+  --primary-bg: rgb(5, 5, 5);
+  --secondary-bg: rgb(25, 25, 25);
+  --tertiary-bg: rgb(5, 5, 5);
+  --accent: #40e0d0;
+  --border: #333333;
+  /* Turquoise accent from Grok examples */
+  --hover-bg: #1f2937;
+  --border-radius: 20px;
+  --border-radius-plus: 40px;
+  --button-bg: #2a2a2a; /* New: Slightly elevated dark bg for buttons to stand out */
+  --button-hover-bg: #3a3a3a; /* New: Lighter hover for depth */
+  --button-border: #444444; /* New: Subtle border for modern definition */
+}
+
+/* Button styles adapted - Made more standard/modern like Grok dark mode or Airbnb:
+   - Added subtle border and elevated background for visibility on dark themes.
+   - Increased padding slightly for better touch/feel.
+   - Smooth transitions and hover effects for modernity.
+   - Inspired by Grok's clean, rounded dark buttons with accent highlights, and Airbnb's minimal, prominent CTAs.
+*/
+.button {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--primary-text);
+  background-color: var(--button-bg); /* Elevated from page bg for button-like appearance */
+  border: 1px solid var(--button-border); /* Subtle border for definition */
+  border-radius: var(--border-radius);
+  padding-left: 1rem; /* Slightly increased for modern spacing */
+  padding-right: 1rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.button:hover {
+  background-color: var(--button-hover-bg); /* Lighter hover for depth */
+  border-color: var(--accent); /* Grok-like accent on hover for pop */
+}
+
+.button:disabled {
+  background-color: var(--secondary-bg);
+  border-color: var(--border);
+  cursor: not-allowed;
+  opacity: 0.7; /* Added for disabled state clarity */
+}
+
+.svg-button {
+  color: var(--primary-text);
+  background-color: var(--button-bg); /* Added bg to make icon buttons feel solid */
+  border: 1px solid var(--button-border); /* Subtle border */
+  padding: 0.5rem; /* Slightly increased */
+  border-radius: var(--border-radius);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svg-button:hover {
+  color: var(--accent);
+  background-color: var(--button-hover-bg);
+  border-color: var(--accent);
+}
+
+/* Main styles */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: universalSans, Inter, Roboto, "Open Sans", Arial, sans-serif, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  display: flex;
+  height: 100vh;
+  font-size: 16px;
+}
+
+.chat-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  width: 100%;
+  border-radius: var(--border-radius);
+  position: relative;
+}
+
+.sidebar {
+  width: 250px;
+  padding: 20px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  border-top-left-radius: var(--border-radius);
+  border-bottom-left-radius: var(--border-radius);
+}
+
+.new-chat-btn {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.chat-history {
+  list-style: none;
+  padding: 0;
+}
+
+.chat-history li {
+  padding: 10px;
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  margin-bottom: 10px;
+  background-color: var(--tertiary-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-history li:hover {
+  background-color: var(--hover-bg);
+}
+
+.delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--primary-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.delete-btn:hover {
+  color: red;
+}
+
+.chat-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top-right-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-toolbar {
+  padding: 10px;
+  background: var(--primary-bg);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-input-container {
+  margin: 20px;
+  padding: 0 20px 0 0;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-plus);
+}
+
+.chat-input-div {
+  display: flex;
+  align-items: center;
+}
+
+.chat-input {
+  flex: 1;
+  max-height: 300px;
+  padding: 16px 8px;
+  margin: 10px 20px;
+  border: none;
+  background: transparent;
+  color: var(--primary-text);
+  outline: none;
+  overflow-y: auto;
+  resize: none;
+}
+
+.model-select {
+  background-color: var(--tertiary-bg);
+  color: var(--primary-text);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.message {
+  margin-bottom: 20px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.message-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+
+.message.user {
+  padding-left:20%;
+}
+
+.message.user pre{
+  justify-content: flex-end;
+  align-items: flex-end;
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  border-bottom-right-radius: 6px;
+  background-color: var(--secondary-bg);
+  margin:40px;
+}
+
+.action-icon {
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  fill: var(--primary-text);
+}
+
+.content {
+  max-width: 60%;
+  width: 100%;
+  line-height: 1.75;
+}
+
+.content h1,.content h2,.content h3,.content h4,.content h5,.content h6 {
+
+}
+
+.grok .content {
+  background-color: var(--tertiary-bg);
+  padding: 10px;
+  border-radius: var(--border-radius);
+}
+
+.user .content {
+  background-color: var(--secondary-bg);
+  padding: 10px 10px 10px 20px;
+  border-radius: var(--border-radius);
+}
+
+.error .content {
+  background-color: var(--tertiary-bg);
+  color: red;
+  padding: 10px;
+  border-radius: var(--border-radius);
+}
+
+.content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+}
+
+.content * {
+  margin: 0;
+  padding: 0;
+}
+
+.content table {
+  border-collapse: collapse;
+  width: 100%;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.content th,
+.content td {
+  border: 1px solid var(--secondary-text);
+  padding: 8px;
+}
+
+.content th {
+  background-color: var(--secondary-bg);
+}
+
+.content code {
+  background-color: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  padding: 2px 4px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.content pre {
+  background-color: var(--secondary-bg);
+  padding: 10px;
+  border-radius: var(--border-radius);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+}
+
+.content pre code {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* ==================== NEW: List styles (ul / ol) ==================== */
+/* Works inside .content (Markdown-rendered content) and directly in messages */
+.content ul,
+.content ol,
+.chat-messages ul,
+.chat-messages ol {
+  margin: 0;                    /* nice breathing room */
+  padding-left: 1.75em;
+  color: var(--primary-text);
+  line-height: 1;
+}
+
+.content li,
+.chat-messages li {
+  position: relative;
+  line-height: 1.75;
+}
+
+/* Default bullets & numbers (clean dark-theme look) */
+.content ul {
+  list-style-type: disc;
+}
+.content ol {
+  list-style-type: decimal;
+}
+
+/* Nested lists – progressively nicer markers */
+.content ul ul,
+.content ol ul {
+  list-style-type: circle;
+}
+.content ul ol,
+.content ol ol {
+  list-style-type: lower-alpha;
+}
+.content ul ul ul,
+.content ol ul ul {
+  list-style-type: square;
+}
+
+/* Accent-colored markers (Grok turquoise touch) */
+.content li::marker,
+.chat-messages li::marker {
+  color: var(--accent);
+}
+
+/* Extra polish for tight spacing inside code-like blocks */
+.content ul,
+.content ol {
+  padding-left: 2em;                   /* slightly more indent inside .content */
+}
+
+/* Make sure lists inside code blocks don't inherit weird styles */
+.content pre ul,
+.content pre ol,
+.content code ul,
+.content code ol {
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+
+/* ==================== End of list styles ==================== */
+/* === ULTRA-TIGHT CONTENT FIX: Add this block verbatim === */
+.content {
+  line-height: 1.4 !important;
+  margin: 0 !important;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.content *,
+.content * * {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+  box-sizing: border-box !important;
+}
+
+.content > p,
+.content > div,
+.content > ul,
+.content > ol,
+.content > blockquote,
+.content > pre,
+.content > table,
+.content > h1,
+.content > h2,
+.content > h3,
+.content > h4,
+.content > h5,
+.content > h6 {
+  margin-bottom: 0.5em !important;
+}
+
+.content > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+.content p {
+  margin-block: 0.25em 0.5em !important;
+}
+
+.content p + p {
+  margin-top: 0.25em !important;
+}
+
+.content h1 { font-size: 1.5em; margin-block: 0 0.5em !important; }
+.content h2 { font-size: 1.25em; margin-block: 0 0.5em !important; }
+.content h3,
+.content h4 { font-size: 1em; margin-block: 0 0.5em !important; }
+
+.content ul,
+.content ol {
+  margin-block: 0 0.5em !important;
+  padding-left: 1.5em !important;
+}
+
+.content li {
+  margin-block: 0.125em 0 !important;
+}
+
+.content blockquote {
+  margin-block: 0 0.5em !important;
+  padding-left: 1em !important;
+  border-left: 3px solid var(--accent, #007acc);
+}
+
+.content code {
+  padding: 0.125em 0.375em !important;
+  margin: 0 0.125em !important;
+}
+
+.content pre {
+  margin-block: 0 0.5em !important;
+  padding: 1em !important;
+}
+
+.content th,
+.content td {
+  padding: 0.5em !important;
+}
+
+.grok .content,
+.user .content {
+  padding: 12px !important;
+}
+/* === End snippet === */
+
+/* Mermaid styles */
+.mermaid {
+  text-align: center;
+}
+
+/* Additional overrides */
+.send-btn {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important; /* Added for consistency */
+}
+
+.action-btn:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+/* Auth popup */
+.auth-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.auth-form {
+  background-color: var(--secondary-bg);
+  padding: 20px;
+  border-radius: var(--border-radius);
+  width: 300px;
+}
+
+.auth-input {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: var(--tertiary-bg);
+  color: var(--primary-text);
+  border: none;
+  border-radius: var(--border-radius);
+}
+
+.overlay {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 5;
+}
+
+.menu-btn {
+  display: none;
+}
+
+/* Media queries for responsiveness */
+@media (max-width: 768px) {
+  .sidebar {
+    position: absolute;
+    left: -250px;
+    top: 0;
+    bottom: 0;
+    height: 100%;
+    transition: left 0.3s ease;
+    z-index: 10;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .chat-root {
+    width: 100%;
+  }
+
+  .content {
+    max-width: 100%;
+  }
+
+  .chat-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .auth-form {
+    width: 90%;
+    max-width: 300px;
+  }
+
+  .menu-btn {
+    display: flex;
+  }
+}
