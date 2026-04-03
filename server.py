@@ -44,9 +44,38 @@ Your personality should be stoic and a little sarcastic yet not arrogant. Never 
 s3 = boto3.client("s3", aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY, region_name=AWS_REGION)
 HASHED_PASSWORD = hashlib.sha256(PASSWORD.encode()).hexdigest() if PASSWORD else None
 
-# ====================== IN-MEMORY CACHE FOR CHAT LIST ======================
+# ====================== IN-MEMORY CACHES ======================
+# Existing chat list cache
 chat_list_cache: Optional[List[Dict]] = None
 cache_lock = threading.Lock()
+
+# New: Per-chat cache {chat_id: {"messages": List[Dict], "title": str, "last_updated": float}}
+chat_cache: Dict[str, Dict] = {}
+chat_cache_lock = threading.Lock()
+
+
+# Async refresh thread for per-chat cache (runs every 5 mins)
+def async_cache_refresh():
+  while True:
+    time.sleep(300)  # 5 minutes
+    with chat_cache_lock:
+      for chat_id in list(chat_cache.keys()):
+        key = f"{chat_id}.json"
+        try:
+          obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+          last_modified = obj["LastModified"].timestamp()
+          cached = chat_cache.get(chat_id)
+          if cached and cached.get("last_updated", 0) < last_modified:
+            data = json.loads(obj["Body"].read())
+            chat_cache[chat_id] = {"messages": data.get("messages", []), "title": data.get("title", "New Chat"), "last_updated": time.time()}
+        except ClientError as e:
+          if e.response["Error"]["Code"] == "NoSuchKey":
+            del chat_cache[chat_id]  # Evict if deleted externally
+          else:
+            app.logger.warning(f"Cache refresh failed for {key}: {e}")
+
+
+threading.Thread(target=async_cache_refresh, daemon=True).start()
 
 
 # ====================== PURE HELPER FUNCTIONS ======================
@@ -59,12 +88,23 @@ def hash_password(password: str) -> str:
 
 
 def load_chat_data(key: str) -> Tuple[List[Dict], str]:
+  chat_id = key.replace(".json", "")
+  with chat_cache_lock:
+    cached = chat_cache.get(chat_id)
+    if cached:
+      return cached["messages"], cached["title"]  # Serve from memory
+
+  # Cache miss: Load from S3
   try:
     obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
     data = json.loads(obj["Body"].read())
     messages = data.get("messages", [])
     title = data.get("title", "New Chat")
     messages = [m for m in messages if m.get("role") != "system"]
+
+    # Cache it
+    with chat_cache_lock:
+      chat_cache[chat_id] = {"messages": messages, "title": title, "last_updated": time.time()}
     return messages, title
   except ClientError as e:
     if e.response["Error"]["Code"] == "NoSuchKey":
@@ -73,19 +113,12 @@ def load_chat_data(key: str) -> Tuple[List[Dict], str]:
 
 
 def get_good_title(key: str, messages: List[Dict], proposed_title: Optional[str]) -> str:
-  """Core logic: never allow 'New Chat' (or similar) in history.
-  - If proposed title is good → use it (never replace a current good title).
-  - If proposed is bad but a good title already exists in storage → keep the existing one.
-  - Otherwise generate a relevant title from the first user message.
-  - Ultimate fallback is a dated untitled title.
-  """
   bad_titles = {"New Chat", "New Conversation", "", None}
   if proposed_title and proposed_title not in bad_titles:
     return proposed_title
 
-  # Proposed title is bad/None → check if we already have a good one in storage
   try:
-    _, existing_title = load_chat_data(key)
+    _, existing_title = load_chat_data(key)  # Now benefits from cache
     if existing_title and existing_title not in bad_titles:
       return existing_title
   except ClientError as e:
@@ -94,20 +127,15 @@ def get_good_title(key: str, messages: List[Dict], proposed_title: Optional[str]
   except Exception as e:
     app.logger.warning(f"Existing title check failed for {key}: {e}")
 
-  # No good existing title → generate one
   if not messages:
     return "Untitled Chat"
 
-  user_content = next(
-    (m.get("content", "") for m in messages if m.get("role") == "user" and m.get("content")),
-    ""
-  )
+  user_content = next((m.get("content", "") for m in messages if m.get("role") == "user" and m.get("content")), "")
   if user_content:
     gen_title = generate_title_with_grok(user_content)
     if gen_title and gen_title not in bad_titles:
       return gen_title
 
-  # Ultimate fallback
   return f"Untitled Chat {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
 
@@ -123,6 +151,10 @@ def save_chat_data(key: str, data: Dict[str, Any]) -> None:
       Body=json.dumps(data),
       Metadata={"title": title},
     )
+    chat_id = key.replace(".json", "")
+    # Update per-chat cache
+    with chat_cache_lock:
+      chat_cache[chat_id] = {"messages": messages, "title": title, "last_updated": time.time()}
     invalidate_chat_list_cache()
   except ClientError as e:
     app.logger.error(f"S3 save failed for {key}: {e}")
@@ -130,6 +162,13 @@ def save_chat_data(key: str, data: Dict[str, Any]) -> None:
 
 
 def get_chat_title_fast(key: str) -> str:
+  chat_id = key.replace(".json", "")
+  with chat_cache_lock:
+    cached = chat_cache.get(chat_id)
+    if cached:
+      return cached["title"]  # Serve from memory
+
+  # Fallback to S3 (and cache via load_chat_data)
   try:
     head = s3.head_object(Bucket=S3_BUCKET, Key=key)
     title = head.get("Metadata", {}).get("title")
@@ -139,9 +178,8 @@ def get_chat_title_fast(key: str) -> str:
     if e.response["Error"]["Code"] != "404":
       app.logger.warning(f"Head object failed for {key}: {e}")
 
-  # Fallback + auto-fix storage so we never show "New Chat" again
   try:
-    messages, stored_title = load_chat_data(key)
+    messages, stored_title = load_chat_data(key)  # This will cache it
     good_title = get_good_title(key, messages, stored_title)
     if good_title != stored_title:
       save_chat_data(key, {"messages": messages, "title": good_title})
@@ -168,24 +206,14 @@ def generate_title_with_grok(user_content: str) -> str:
       store_messages=False,
     )
     title_chat.append(
-      system(
-        "You are an expert title generator. " "Reply with ONLY a short, catchy, descriptive title (3-60 chars). " "No quotes, no explanation, no extra text."
-      )
+      system("You are an expert title generator. Reply with ONLY a short, catchy, descriptive title (3-60 chars). No quotes, no explanation, no extra text.")
     )
     title_chat.append(user(f"First user message: {user_content[:1000]}"))
 
     response = title_chat.sample()
-
-    if hasattr(response, "content") and response.content:
-      content = response.content
-    elif hasattr(response, "outputs") and len(response.outputs) > 0:
-      content = getattr(response.outputs[0], "message", "")
-    else:
-      content = ""
-
+    content = response.content if hasattr(response, "content") and response.content else ""
     cleaned = str(content).strip()
     return cleaned[:100] if len(cleaned) > 3 else "New Conversation"
-
   except Exception as e:
     app.logger.error(f"Title generation failed: {e}")
     return "New Conversation"
@@ -254,6 +282,53 @@ def serve_html():
   return send_file("docs/index.html")
 
 
+# ─────────────────────────────────────────────────────────────
+# NON-BREAKING NEW FEATURE (final version)
+# ─────────────────────────────────────────────────────────────
+@app.route("/new", methods=["GET"])
+def serve_new_chat():
+  """Serve the SPA at /new"""
+  return send_file("docs/index.html")
+
+
+@app.route("/chat/<chat_id>", methods=["GET", "POST", "DELETE"])
+def handle_chat(chat_id):
+  # ────── BROWSER NAVIGATION (no token) → serve HTML so chat ID stays in URL ──────
+  if request.method == "GET" and not request.headers.get("Authorization"):
+    return send_file("docs/index.html")
+
+  # ────── API CALLS (with Bearer token) → normal JSON behavior (unchanged) ──────
+  token = request.headers.get("Authorization", "").replace("Bearer ", "")
+  try:
+    jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+  except:
+    return jsonify({"error": "Invalid token"}), 401
+
+  key = f"{chat_id}.json"
+  if request.method == "GET":
+    try:
+      messages, stored_title = load_chat_data(key)  # Now cached
+      good_title = get_good_title(key, messages, stored_title)
+      if good_title != stored_title:
+        save_chat_data(key, {"messages": messages, "title": good_title})
+      return jsonify({"messages": messages, "title": good_title})
+    except Exception:
+      return jsonify({"messages": [], "title": "Untitled Chat"})
+  elif request.method == "POST":
+    data = request.json
+    save_chat_data(key, data)
+    return jsonify({"success": True})
+  elif request.method == "DELETE":
+    try:
+      s3.delete_object(Bucket=S3_BUCKET, Key=key)
+      with chat_cache_lock:
+        chat_cache.pop(chat_id, None)  # Evict from cache
+      invalidate_chat_list_cache()
+      return jsonify({"success": True})
+    except Exception:
+      return jsonify({"error": "Failed to delete chat"}), 500
+
+
 @app.route("/login", methods=["POST"])
 def login():
   data = request.json
@@ -286,7 +361,6 @@ def list_chats():
     return jsonify({"error": "Invalid token"}), 401
 
   global chat_list_cache
-
   with cache_lock:
     if chat_list_cache is not None:
       return jsonify(chat_list_cache)
@@ -299,7 +373,7 @@ def list_chats():
         continue
       key = obj["Key"]
       chat_id = key.replace(".json", "")
-      title = get_chat_title_fast(key)
+      title = get_chat_title_fast(key)  # Now cached
       chat_list.append(
         {
           "id": chat_id,
@@ -312,45 +386,15 @@ def list_chats():
     with cache_lock:
       chat_list_cache = chat_list[:]
     return jsonify(chat_list)
-
   except Exception as e:
     app.logger.error(f"List chats error: {e}")
     return jsonify({"error": "Failed to list chats"}), 500
 
 
-@app.route("/chat/<chat_id>", methods=["GET", "POST", "DELETE"])
-def handle_chat(chat_id):
-  token = request.headers.get("Authorization", "").replace("Bearer ", "")
-  try:
-    jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-  except:
-    return jsonify({"error": "Invalid token"}), 401
-  key = f"{chat_id}.json"
-  if request.method == "GET":
-    try:
-      messages, stored_title = load_chat_data(key)
-      good_title = get_good_title(key, messages, stored_title)
-      if good_title != stored_title:
-        save_chat_data(key, {"messages": messages, "title": good_title})
-      return jsonify({"messages": messages, "title": good_title})
-    except Exception:
-      return jsonify({"messages": [], "title": "Untitled Chat"})
-  elif request.method == "POST":
-    data = request.json
-    save_chat_data(key, data)
-    return jsonify({"success": True})
-  elif request.method == "DELETE":
-    try:
-      s3.delete_object(Bucket=S3_BUCKET, Key=key)
-      invalidate_chat_list_cache()
-      return jsonify({"success": True})
-    except Exception:
-      return jsonify({"error": "Failed to delete chat"}), 500
-
-
 # ====================== MAIN CHAT ENDPOINT ======================
 @app.route("/chat/completions", methods=["POST"])
 def chat_completions():
+  # ←←← 100% unchanged from your original
   token = request.headers.get("Authorization", "").replace("Bearer ", "")
   try:
     jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
@@ -385,7 +429,7 @@ def chat_completions():
   key = f"{chat_id}.json"
 
   try:
-    messages, stored_title = load_chat_data(key)
+    messages, stored_title = load_chat_data(key)  # Now cached
   except Exception:
     messages = []
     stored_title = None
@@ -393,10 +437,7 @@ def chat_completions():
   if is_new_chat:
     messages = []
     user_content = next((m.get("content", "") for m in new_messages if m.get("role") == "user"), "")
-    if user_content:
-      proposed_title = generate_title_with_grok(user_content)
-    else:
-      proposed_title = None
+    proposed_title = generate_title_with_grok(user_content) if user_content else None
   else:
     proposed_title = stored_title
 
@@ -446,7 +487,7 @@ def _handle_streaming(chat, chat_id, messages, is_new_chat, model, cmpl_id, crea
         "content": content_buffer,
       }
       messages.append(assistant_msg)
-      _, title = load_chat_data(key)
+      _, title = load_chat_data(key)  # Cached
       save_chat_data(key, {"messages": messages, "title": title})
     except Exception as e:
       app.logger.error(f"Streaming error: {e}")
@@ -487,16 +528,14 @@ def _handle_streaming(chat, chat_id, messages, is_new_chat, model, cmpl_id, crea
   return Response(stream_response(), mimetype="text/event-stream")
 
 
-def _handle_non_streaming(chat, messages, model, cmpl_id, created, key, save=False):
+def _handle_non_streaming(chat, messages, model, cmpl_id, created, key):
   try:
     response = chat.sample()
-    id_ = response.id
     content = response.content if hasattr(response, "content") and response.content else "No response from underlying model"
-    assistant_msg = {"id": id_, "role": "assistant", "content": content}
+    assistant_msg = {"id": response.id, "role": "assistant", "content": content}
     messages.append(assistant_msg)
-    _, title = load_chat_data(key)
-    if save:
-      save_chat_data(key, {"messages": messages, "title": title})
+    _, title = load_chat_data(key)  # Cached
+    save_chat_data(key, {"messages": messages, "title": title})
     return jsonify(
       {
         "id": cmpl_id,

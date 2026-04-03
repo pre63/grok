@@ -2,10 +2,12 @@
 <html lang="en">
 
 <head>
+  <title>Grok Chat</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon" />
   <link rel="manifest" href="/manifest.json">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Grok Chat</title>
+
   <!-- Showdown for Markdown -->
   <script src="/showdown.js"></script>
   <!-- KaTeX for LaTeX -->
@@ -18,7 +20,7 @@
   <script src="/mermaid.js"></script>
   <!-- DOMPurify for sanitizing HTML -->
   <script src="/purify.js"></script>
-  <link rel="stylesheet" href="/app.css" >
+  <link rel="stylesheet" href="/app.css">
 </head>
 
 <body>
@@ -41,18 +43,6 @@
             <path d="M3 5h18M3 12h18M3 19h18" />
           </svg>
         </button>
-        <button class="action-btn button" id="copyBtn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path d="M8 4a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H8zm-6 4h4v10H2V8zm14 2h4v6h-4v-6z" />
-          </svg>
-          Copy
-        </button>
-        <button class="action-btn button" id="clearBtn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path d="M3 6h18v2H3V6zm3 3h12v12a2 2 0 01-2 2H8a2 2 0 01-2-2V9zm3-6h6v2H9V3z" />
-          </svg>
-          Clear
-        </button>
         <button class="action-btn button" id="expertBtn">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M12 2a10 10 0 0110 10v1h-2v-1a8 8 0 00-16 0v1H2v-1A10 10 0 0112 2zm0 4a6 6 0 016 6v1H6v-1a6 6 0 016-6zm-3 8h6v2H9v-2zm-2 4h10v2H7v-2z" />
@@ -60,10 +50,10 @@
           Think Harder
         </button>
         <select id="modelSelect" class="model-select">
-          <option value="grok-4-1-fast-reasoning">Fast</option>
-          <option value="grok-4-1-fast-non-reasoning">Fast Non-Reasoning</option>
-          <option value="grok-code-fast-1">Code</option>
-          <option value="grok-4-0709">Expert</option>
+          <option value="grok-4-1-fast-reasoning">Speedy</option>
+          <option value="grok-4-1-fast-non-reasoning">Dumb Dumb</option>
+          <option value="grok-code-fast-1">Codalito</option>
+          <option value="grok-4-0709">Grok</option>
         </select>
       </div>
       <div class="chat-input-container">
@@ -90,7 +80,7 @@
     </div>
   </div>
 
-  <script src="/app.js"  ></script>
+  <script src="/app.js"></script>
   <style>
     * {
       font-family: universalSans, Inter, Roboto, "Open Sans", Arial, sans-serif, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
@@ -102,5 +92,4 @@
     }
   </style>
 </body>
-
 </html>
