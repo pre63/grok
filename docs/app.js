@@ -239,7 +239,7 @@ async function streamApi(
         try {
           const parsed = JSON.parse(dataStr)
           onData(parsed)
-        } catch (e) { }
+        } catch (e) {}
       }
     }
   }
@@ -354,8 +354,8 @@ async function renderContent(text, element, isUser = false) {
         '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 4v2h6V4h2v2h1a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h1V4h2zm8 4H7v10h10V8zM9 10h2v2H9v-2zm4 0h2v2h-2v-2zm-4 4h2v2H9v-2zm4 0h2v2h-2v-2z"/></svg>'
       setTimeout(
         () =>
-        (copyButton.innerHTML =
-          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 4a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H8zm-6 4h4v10H2V8zm14 2h4v6h-4v-6z"/></svg>'),
+          (copyButton.innerHTML =
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 4a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H8zm-6 4h4v10H2V8zm14 2h4v6h-4v-6z"/></svg>'),
         2000
       )
     }
@@ -559,8 +559,7 @@ async function initApp() {
     })
 
     observer.observe(chatRoot, { childList: true, subtree: true })
-  } 
-
+  }
 }
 
 window.onload = initApp

@@ -19,6 +19,8 @@ from xai_sdk import Client
 from xai_sdk.chat import assistant, system, user
 from xai_sdk.tools import code_execution, web_search, x_search
 
+from src.grok_researcher import _handle_research_streaming, init_researcher, perform_research_mode
+
 app = Flask(__name__)
 CORS(app)
 
@@ -43,6 +45,7 @@ Your personality should be stoic and a little sarcastic yet not arrogant. Never 
 """
 s3 = boto3.client("s3", aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY, region_name=AWS_REGION)
 HASHED_PASSWORD = hashlib.sha256(PASSWORD.encode()).hexdigest() if PASSWORD else None
+
 
 # ====================== IN-MEMORY CACHES ======================
 # Existing chat list cache
@@ -271,6 +274,11 @@ def build_xai_chat(
   return chat
 
 
+init_researcher(
+  SYSTEM_PROMPT, XAI_API_KEY, generate_id, save_chat_data, app.logger  # your existing generate_id function  # your existing save_chat_data function
+)
+
+
 # ====================== ROUTES ======================
 @app.route("/<path:filename>")
 def serve_docs(filename):
@@ -394,12 +402,12 @@ def list_chats():
 # ====================== MAIN CHAT ENDPOINT ======================
 @app.route("/chat/completions", methods=["POST"])
 def chat_completions():
-  # ←←← 100% unchanged from your original
   token = request.headers.get("Authorization", "").replace("Bearer ", "")
   try:
     jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
   except:
     return jsonify({"error": "Invalid token"}), 401
+
   data = request.json
   chat_id = data.get("chat_id")
   new_messages = data.get("messages", [])
@@ -429,7 +437,7 @@ def chat_completions():
   key = f"{chat_id}.json"
 
   try:
-    messages, stored_title = load_chat_data(key)  # Now cached
+    messages, stored_title = load_chat_data(key)
   except Exception:
     messages = []
     stored_title = None
@@ -449,10 +457,33 @@ def chat_completions():
   chat_data = {"messages": messages, "title": proposed_title}
   save_chat_data(key, chat_data)
 
-  chat = build_xai_chat(messages, new_messages, model, temperature, max_tokens, use_tools)
   cmpl_id = generate_id()
   created = int(time.time())
 
+  # ────── GROK RESEARCHER FEATURE (now modular) ──────
+  if model == "grok-research":
+    real_model = "grok-4-1-fast-reasoning"
+    user_content = next((m.get("content", "") for m in new_messages if m.get("role") == "user"), "")
+    synthesis_content = perform_research_mode(user_content, messages, key, real_model, temperature, max_tokens)
+    synthesis_msg = {"id": generate_id(), "role": "assistant", "content": synthesis_content}
+    messages.append(synthesis_msg)
+    save_chat_data(key, {"messages": messages, "title": proposed_title})
+
+    if stream:
+      return _handle_research_streaming(synthesis_content, chat_id, is_new_chat, model, cmpl_id, created)
+    else:
+      return jsonify(
+        {
+          "id": cmpl_id,
+          "object": "chat.completion",
+          "created": created,
+          "model": model,
+          "choices": [{"message": synthesis_msg, "finish_reason": "stop", "index": 0}],
+        }
+      )
+
+  # Normal non-research flow (unchanged)
+  chat = build_xai_chat(messages, new_messages, model, temperature, max_tokens, use_tools)
   if stream:
     return _handle_streaming(chat, chat_id, messages, is_new_chat, model, cmpl_id, created, key)
   else:
