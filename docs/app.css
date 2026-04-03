@@ -114,7 +114,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--primary-text);
   background-color: var(--button-bg); /* Added bg to make icon buttons feel solid */
   border: 1px solid var(--button-border); /* Subtle border */
-  padding: 0.5rem; /* Slightly increased */
+  padding: 0.1rem; /* Slightly increased */
   border-radius: var(--border-radius);
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);

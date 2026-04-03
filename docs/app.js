@@ -127,6 +127,7 @@ function renderChatHistory() {
     deleteBtn.appendChild(deleteSvg)
     deleteBtn.onclick = e => {
       e.stopImmediatePropagation()
+      li.remove()
       deleteChat(chat.id)
     }
     li.appendChild(deleteBtn)
@@ -377,41 +378,69 @@ function appendMessage(roleLabel, content, isEdit = false) {
   actions.classList.add('message-actions')
   if (roleLabel === 'Grok') {
     // Regenerate
-    const regenerateSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    regenerateSvg.setAttribute('viewBox', '0 0 24 24')
-    regenerateSvg.innerHTML =
-      '<path d="M4 12a8 8 0 0116 0M4 12V6m0 6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
-    regenerateSvg.classList.add('action-icon', 'svg-button')
-    regenerateSvg.onclick = () => regenerateMessage(messageDiv)
-    actions.appendChild(regenerateSvg)
+    const regenerateSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    regenerateSvg.setAttribute('viewBox', '0 0 24 24');
+    regenerateSvg.setAttribute('width', '24');  // Explicit size to avoid shrinking
+    regenerateSvg.setAttribute('height', '24');
+    regenerateSvg.setAttribute('fill', 'none');  // No fill for outline icons
+    regenerateSvg.setAttribute('stroke', 'currentColor');
+    regenerateSvg.setAttribute('stroke-width', '2');
+    regenerateSvg.setAttribute('stroke-linecap', 'round');
+    regenerateSvg.setAttribute('stroke-linejoin', 'round');
+    
+    regenerateSvg.innerHTML = `
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.79 2.89"/>
+      <path d="M21 3v6h-6"/>
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.79-2.89"/>
+      <path d="M3 21v-6h6"/>
+    `;
+    
+    regenerateSvg.classList.add('action-icon', 'svg-button');
+    regenerateSvg.onclick = () => regenerateMessage(messageDiv);
+    actions.appendChild(regenerateSvg);
 
-    // Continue
-    const continueSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    continueSvg.setAttribute('viewBox', '0 0 24 24')
-    continueSvg.innerHTML =
-      '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
-    continueSvg.classList.add('action-icon', 'svg-button')
-    continueSvg.onclick = () => continueMessage()
-    actions.appendChild(continueSvg)
+  } else {
+    // Edit
+    const editSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+editSvg.setAttribute('viewBox', '0 0 24 24');
+editSvg.setAttribute('width', '24');  // Add explicit size
+editSvg.setAttribute('height', '24');
+editSvg.setAttribute('fill', 'none');  // Crucial for outline icons
+editSvg.setAttribute('stroke', 'currentColor');
+editSvg.setAttribute('stroke-width', '2');
+editSvg.setAttribute('stroke-linecap', 'round');
+editSvg.setAttribute('stroke-linejoin', 'round');
 
-    // Read aloud
-    const speakSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    speakSvg.setAttribute('viewBox', '0 0 24 24')
-    speakSvg.innerHTML =
-      '<path d="M3 18v-6a9 9 0 0118 0v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
-    speakSvg.classList.add('action-icon', 'svg-button')
-    speakSvg.onclick = () => readAloud(contentElem.innerText)
-    actions.appendChild(speakSvg)
+editSvg.innerHTML = `
+  <path d="M12 20h9"/>
+  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+`;
+
+editSvg.classList.add('action-icon', 'svg-button');
+editSvg.onclick = () => editMessage(messageDiv, roleLabel);
+actions.appendChild(editSvg);
   }
-  // Edit
-  const editSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  editSvg.setAttribute('viewBox', '0 0 24 24')
-  editSvg.innerHTML =
-    '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
-  editSvg.classList.add('action-icon', 'svg-button')
-  editSvg.onclick = () => editMessage(messageDiv, roleLabel)
-  actions.appendChild(editSvg)
 
+  // Copy
+  const copySvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  copySvg.setAttribute('viewBox', '0 0 24 24');
+  copySvg.setAttribute('width', '24');  // Keeps it visible and sized
+  copySvg.setAttribute('height', '24');
+  copySvg.setAttribute('fill', 'none');
+  copySvg.setAttribute('stroke', 'currentColor');
+  copySvg.setAttribute('stroke-width', '2');
+  copySvg.setAttribute('stroke-linecap', 'round');
+  copySvg.setAttribute('stroke-linejoin', 'round');
+  
+  copySvg.innerHTML = `
+    <path d="M8 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2"/>
+    <path d="M16 4H8a2 2 0 0 0-2 2v13h12V6a2 2 0 0 0-2-2z"/>
+  `;
+  
+  copySvg.classList.add('action-icon', 'svg-button');
+  copySvg.onclick = () => copyMessage(messageDiv);  // Adjust function name/args as needed
+  actions.appendChild(copySvg);
+  
   messageDiv.appendChild(actions)
 
   messagesDiv.appendChild(messageDiv)
