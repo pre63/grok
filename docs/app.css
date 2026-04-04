@@ -158,6 +158,7 @@ body {
   border-right: 1px solid var(--border);
   border-top-left-radius: var(--border-radius);
   border-bottom-left-radius: var(--border-radius);
+  background-color: #000000;
 }
 
 .new-chat-btn {

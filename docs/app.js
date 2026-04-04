@@ -103,18 +103,15 @@ async function loadChatHistory() {
     renderChatHistory()
   }
 }
-
 function renderChatHistory() {
   chatHistory.innerHTML = ''
   chats.forEach(chat => {
     const li = document.createElement('li')
-    const titleSpan = document.createElement('span')
-    titleSpan.textContent = chat.title || 'Untitled Chat'
-    titleSpan.onclick = () => {
-      history.pushState(null, '', `/chat/${chat.id}`)
-      loadChat(chat.id)
-    }
-    li.appendChild(titleSpan)
+
+    const titleLink = document.createElement('a')
+    titleLink.textContent = chat.title || 'Untitled Chat'
+    titleLink.href = `/chat/${chat.id}`
+    li.appendChild(titleLink)
 
     const deleteBtn = document.createElement('button')
     deleteBtn.classList.add('delete-btn')
@@ -185,16 +182,6 @@ async function saveChat() {
   })
   await loadChatHistory()
 }
-
-// ====================== NEW CHAT ======================
-function newChat() {
-  currentChatId = null
-  conversation = []
-  messagesDiv.innerHTML = ''
-  updateUrlWithChatId(null)
-  closeSidebar()
-}
-newChatBtn.onclick = newChat
 
 // ====================== STREAM API ======================
 async function streamApi(
@@ -378,69 +365,68 @@ function appendMessage(roleLabel, content, isEdit = false) {
   actions.classList.add('message-actions')
   if (roleLabel === 'Grok') {
     // Regenerate
-    const regenerateSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    regenerateSvg.setAttribute('viewBox', '0 0 24 24');
-    regenerateSvg.setAttribute('width', '24');  // Explicit size to avoid shrinking
-    regenerateSvg.setAttribute('height', '24');
-    regenerateSvg.setAttribute('fill', 'none');  // No fill for outline icons
-    regenerateSvg.setAttribute('stroke', 'currentColor');
-    regenerateSvg.setAttribute('stroke-width', '2');
-    regenerateSvg.setAttribute('stroke-linecap', 'round');
-    regenerateSvg.setAttribute('stroke-linejoin', 'round');
-    
+    const regenerateSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    regenerateSvg.setAttribute('viewBox', '0 0 24 24')
+    regenerateSvg.setAttribute('width', '24') // Explicit size to avoid shrinking
+    regenerateSvg.setAttribute('height', '24')
+    regenerateSvg.setAttribute('fill', 'none') // No fill for outline icons
+    regenerateSvg.setAttribute('stroke', 'currentColor')
+    regenerateSvg.setAttribute('stroke-width', '2')
+    regenerateSvg.setAttribute('stroke-linecap', 'round')
+    regenerateSvg.setAttribute('stroke-linejoin', 'round')
+
     regenerateSvg.innerHTML = `
       <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.79 2.89"/>
       <path d="M21 3v6h-6"/>
       <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.79-2.89"/>
       <path d="M3 21v-6h6"/>
-    `;
-    
-    regenerateSvg.classList.add('action-icon', 'svg-button');
-    regenerateSvg.onclick = () => regenerateMessage(messageDiv);
-    actions.appendChild(regenerateSvg);
+    `
 
+    regenerateSvg.classList.add('action-icon', 'svg-button')
+    regenerateSvg.onclick = () => regenerateMessage(messageDiv)
+    actions.appendChild(regenerateSvg)
   } else {
     // Edit
-    const editSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-editSvg.setAttribute('viewBox', '0 0 24 24');
-editSvg.setAttribute('width', '24');  // Add explicit size
-editSvg.setAttribute('height', '24');
-editSvg.setAttribute('fill', 'none');  // Crucial for outline icons
-editSvg.setAttribute('stroke', 'currentColor');
-editSvg.setAttribute('stroke-width', '2');
-editSvg.setAttribute('stroke-linecap', 'round');
-editSvg.setAttribute('stroke-linejoin', 'round');
+    const editSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    editSvg.setAttribute('viewBox', '0 0 24 24')
+    editSvg.setAttribute('width', '24') // Add explicit size
+    editSvg.setAttribute('height', '24')
+    editSvg.setAttribute('fill', 'none') // Crucial for outline icons
+    editSvg.setAttribute('stroke', 'currentColor')
+    editSvg.setAttribute('stroke-width', '2')
+    editSvg.setAttribute('stroke-linecap', 'round')
+    editSvg.setAttribute('stroke-linejoin', 'round')
 
-editSvg.innerHTML = `
+    editSvg.innerHTML = `
   <path d="M12 20h9"/>
   <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-`;
+`
 
-editSvg.classList.add('action-icon', 'svg-button');
-editSvg.onclick = () => editMessage(messageDiv, roleLabel);
-actions.appendChild(editSvg);
+    editSvg.classList.add('action-icon', 'svg-button')
+    editSvg.onclick = () => editMessage(messageDiv, roleLabel)
+    actions.appendChild(editSvg)
   }
 
   // Copy
-  const copySvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  copySvg.setAttribute('viewBox', '0 0 24 24');
-  copySvg.setAttribute('width', '24');  // Keeps it visible and sized
-  copySvg.setAttribute('height', '24');
-  copySvg.setAttribute('fill', 'none');
-  copySvg.setAttribute('stroke', 'currentColor');
-  copySvg.setAttribute('stroke-width', '2');
-  copySvg.setAttribute('stroke-linecap', 'round');
-  copySvg.setAttribute('stroke-linejoin', 'round');
-  
+  const copySvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  copySvg.setAttribute('viewBox', '0 0 24 24')
+  copySvg.setAttribute('width', '24') // Keeps it visible and sized
+  copySvg.setAttribute('height', '24')
+  copySvg.setAttribute('fill', 'none')
+  copySvg.setAttribute('stroke', 'currentColor')
+  copySvg.setAttribute('stroke-width', '2')
+  copySvg.setAttribute('stroke-linecap', 'round')
+  copySvg.setAttribute('stroke-linejoin', 'round')
+
   copySvg.innerHTML = `
     <path d="M8 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2"/>
     <path d="M16 4H8a2 2 0 0 0-2 2v13h12V6a2 2 0 0 0-2-2z"/>
-  `;
-  
-  copySvg.classList.add('action-icon', 'svg-button');
-  copySvg.onclick = () => copyMessage(messageDiv);  // Adjust function name/args as needed
-  actions.appendChild(copySvg);
-  
+  `
+
+  copySvg.classList.add('action-icon', 'svg-button')
+  copySvg.onclick = () => copyMessage(messageDiv) // Adjust function name/args as needed
+  actions.appendChild(copySvg)
+
   messageDiv.appendChild(actions)
 
   messagesDiv.appendChild(messageDiv)
@@ -577,17 +563,50 @@ async function initApp() {
   const chatRoot = document.querySelector('.chat-root')
 
   if (chatRoot) {
+    // Function for adding target="_blank" to a single <a>
+    function addBlankTarget(a) {
+      a.setAttribute('target', '_blank')
+    }
+
+    // Function for replacing [something] with [domain] if it starts with '['
+    function replaceWithDomain(a) {
+      const text = a.textContent.trim()
+      if (text.startsWith('[') && a.href) {
+        try {
+          const url = new URL(a.href)
+          const domain = url.hostname.replace(/^(?:[^.]+\.)*([^.]+\.[^.]+)$/, '$1')
+          a.textContent = `[${domain}]`
+        } catch (e) {
+          // Silent fail for invalid URLs
+        }
+      }
+    }
+
     const observer = new MutationObserver(mutations => {
       mutations.forEach(mutation => {
         mutation.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            node.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'))
+            node.querySelectorAll('a').forEach(a => {
+              // Check if not processed (no target="_blank")
+              if (a.getAttribute('target') !== '_blank') {
+                addBlankTarget(a) // Apply mod 1
+                replaceWithDomain(a) // Apply mod 2
+              }
+            })
           }
         })
       })
     })
 
     observer.observe(chatRoot, { childList: true, subtree: true })
+
+    // Initial run on existing content
+    chatRoot.querySelectorAll('a').forEach(a => {
+      if (a.getAttribute('target') !== '_blank') {
+        addBlankTarget(a)
+        replaceWithDomain(a)
+      }
+    })
   }
 }
 

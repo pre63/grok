@@ -26,12 +26,12 @@
 <body>
   <div class="chat-container">
     <div class="sidebar">
-      <button class="new-chat-btn button" id="newChatBtn">
+      <a class="new-chat-btn button" id="newChatBtn" href="/new" style="text-decoration: none">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
         </svg>
         New Chat
-      </button>
+      </a>
       <ul class="chat-history" id="chatHistory"></ul>
     </div>
     <div class="overlay" id="overlay"></div>
@@ -91,6 +91,17 @@
       color: var(--accent);
       text-decoration: underline;
     }
+
+    #chatHistory a {
+      text-decoration: none;
+      color: white;
+    }
+
+    #messages div.content a::before {
+      content: '';
+      margin-right: 3px;
+    }
   </style>
 </body>
+
 </html>

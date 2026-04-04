@@ -6,7 +6,6 @@ from typing import Any
 
 from flask import Response, jsonify
 
-from .grok_researcher import _handle_research_streaming as researcher_streaming
 from .storage import save_chat
 
 

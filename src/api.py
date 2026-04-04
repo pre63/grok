@@ -1,8 +1,8 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from xai_sdk import Client
 from xai_sdk.chat import assistant, system, user
-from xai_sdk.tools import code_execution, web_search, x_search
+from xai_sdk.tools import web_search, x_search
 
 from .config import SYSTEM_PROMPT, XAI_API_KEY
 
@@ -21,9 +21,10 @@ def build_xai_chat(
   temperature: float,
   max_tokens: int,
   use_tools: bool,
-) -> Any:
+  stream_output: bool = False,  # New: If True, call sample() and return a streaming generator
+) -> Any:  # Returns chat (non-streaming) or Generator[str] (streaming)
   client = Client(api_key=XAI_API_KEY)
-  tools_list = [web_search(), x_search(), code_execution()] if use_tools else []
+  tools_list = [web_search(), x_search()] if use_tools else []
   last_response_id = get_last_assistant_id(messages)
 
   kwargs = {
@@ -31,7 +32,7 @@ def build_xai_chat(
     "temperature": temperature,
     "max_tokens": max_tokens,
     "tools": tools_list,
-    "include": ["verbose_streaming"],
+    "include": ["verbose_streaming", "inline_citations"],
     "store_messages": True,
   }
   if last_response_id:
@@ -57,4 +58,22 @@ def build_xai_chat(
         chat.append(user(m.get("content")))
       elif m.get("role") == "assistant":
         chat.append(assistant(m.get("content")))
-  return chat
+
+  if not stream_output:
+    return chat  # Return the built chat for external sampling
+
+  # Streaming: Call sample() and yield chunks (assumes SDK streams via verbose_streaming)
+  def stream_generator():
+    try:
+      response = chat.sample()  # Assuming sample() returns a streamable response
+      # Yield content chunks (adapt based on exact SDK response structure)
+      for chunk in response:  # If response is iterable (e.g., yields deltas)
+        if hasattr(chunk, "content"):
+          yield chunk.content
+        elif isinstance(chunk, dict) and "delta" in chunk:
+          yield chunk["delta"].get("content", "")
+    except Exception as e:
+      print(f"Streaming failed: {e}")
+      yield f"Error: {str(e)}"
+
+  return stream_generator()

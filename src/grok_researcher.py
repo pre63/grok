@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from xai_sdk import Client
 from xai_sdk.chat import assistant, system, user
-from xai_sdk.tools import code_execution, web_search, x_search
+from xai_sdk.tools import web_search, x_search
 
 from src.config import SYSTEM_PROMPT, XAI_API_KEY
 
@@ -17,48 +17,33 @@ from .storage import generate_id, save_chat
 app_logger = None
 
 
-def init_researcher(logger=None):
-  global app_logger
-  app_logger = logger
+SYNTHESIS_INSTRUCTIONS = f"""**FINAL SYNTHESIS — COMPLETE NEUTRAL SUMMARY**
 
+You are Grok Researcher. Your role is to produce a thorough, objective, and complete synthesis of all previous task findings.
 
-def _build_research_subchat(temp_messages: List[Dict], model: str, temperature: float, max_tokens: int):
-  client = Client(api_key=XAI_API_KEY)
-  tools_list = [web_search(), x_search(), code_execution()]
-  chat = client.chat.create(
-    model=model,
-    temperature=temperature,
-    max_tokens=max_tokens,
-    tools=tools_list,
-    include=["verbose_streaming"],
-    store_messages=False,
-  )
-  chat.append(system(SYSTEM_PROMPT))
-  for m in temp_messages:
-    if m.get("role") == "user":
-      chat.append(user(m.get("content", "")))
-    elif m.get("role") == "assistant":
-      chat.append(assistant(m.get("content", "")))
-  return chat
+Structure the response like a detailed executive summary or comprehensive overview, but significantly longer and more comprehensive:
 
+1. Begin with a one-sentence restatement of the original query.
+2. Present every key factual finding from the tasks, organized logically by topic or theme.
+3. Highlight notable facts, statistics, dates, quotes, source titles, origins, approaches, and results exactly as they were reported — without any interpretation.
+4. Relate the information neutrally and as-is. Do not analyze, compare, critique, or infer implications.
+5. Be exhaustive: include all significant details uncovered across every task.
+6. You need to verify any link you include in your output to ensure there is no 404 or incorrect citations.
 
-def generate_research_plan(query: str, model: str) -> Dict[str, Any]:
-  # (unchanged - same neutral planner as before)
-  try:
-    client = Client(api_key=XAI_API_KEY)
-    plan_chat = client.chat.create(
-      model=model,
-      temperature=0.2,
-      max_tokens=4096,
-      tools=[web_search(), x_search(), code_execution()],
-      store_messages=False,
-    )
-    plan_chat.append(
-      system(
-        """You are Grok Researcher — a strictly neutral, thorough, and objective research assistant.
+Do NOT add any conclusions, recommendations, opinions, or closing statements. Let the reader perform their own analysis and decision-making.
+
+Use clear, precise, neutral language. Aim for maximum completeness and factual density.
+
+Before referencing any link:
+- Call browse_page on it with instructions: "Check for 404, load the page, and provide title, date, and a brief excerpt to ensure it's correct and relevant."
+- Re-verify all task links here if needed.
+- Structure output with [Verified Link: URL] format, including tool-confirmed metadata.
+"""
+
+SYSTEM_INSTRUCTIONS = """You are Grok Researcher — a strictly neutral, thorough, and objective research assistant.
 Your only role is to create a comprehensive research plan by breaking the user's query into 4-8 independent, self-contained tasks.
-Each task must be designed to collect raw facts, data, papers, sources, statistics, or quotes — never to interpret or conclude.
-Focus on depth and completeness. Avoid any bias, opinion, or leading language.
+Each task must be designed to collect raw facts, data, sources, statistics, or quotes — never to interpret or conclude.
+Focus on depth and completeness through broad, parallel searches across diverse domains. Avoid any bias, opinion, or leading language. You need to verify any link you include in your output to ensure there is no 404 or incorrect citations.
 
 Reply with **ONLY** valid JSON (no extra text, no markdown, no explanation):
 
@@ -71,11 +56,32 @@ Reply with **ONLY** valid JSON (no extra text, no markdown, no explanation):
       "description": "Detailed, actionable instructions focused solely on gathering objective information, sources, or data"
     }
   ]
-}"""
-      )
+}
+
+"""
+
+
+def init_researcher(logger=None):
+  global app_logger
+  app_logger = logger
+
+
+def generate_research_plan(query: str, model: str) -> Dict[str, Any]:
+  try:
+    client = Client(api_key=XAI_API_KEY)
+    tools_list = [web_search(), x_search()]
+    plan_chat = client.chat.create(
+      model=model,
+      temperature=0.2,
+      max_tokens=4096,
+      tools=tools_list,
+      include=["verbose_streaming", "inline_citations"],
+      store_messages=True,
     )
+    plan_chat.append(system(SYSTEM_PROMPT))
+    plan_chat.append(system(SYSTEM_INSTRUCTIONS))  # Additional system prompt for planning
     plan_chat.append(user(f"Query: {query}"))
-    response = plan_chat.sample()
+    response = plan_chat.sample()  # Single sample; assumes SDK handles tools
     content = (response.content or "").strip()
     json_match = re.search(r"\{[\s\S]*\}", content)
     json_str = json_match.group(0) if json_match else content
@@ -92,21 +98,38 @@ Reply with **ONLY** valid JSON (no extra text, no markdown, no explanation):
 def execute_research_task(
   original_query: str, plan_summary: str, current_messages: List[Dict], task: Dict, task_idx: int, model: str, temperature: float, max_tokens: int
 ) -> str:
-  temp_messages = [m.copy() for m in current_messages]
-  instruction = f"""**RESEARCH TASK {task_idx} — NEUTRAL FACT-FINDING ONLY**
-Original query: {original_query}
-Plan: {plan_summary}
-Task: {task.get('title')}
-{task.get('description')}
+  TASK_INSTRUCTIONS = f"""**RESEARCH TASK {task_idx} — NEUTRAL FACT-FINDING ONLY**
+  Original query: {original_query}
+  Plan: {plan_summary}
+  Task: {task.get('title')}
+  {task.get('description')}
 
-You are a neutral researcher. Collect and report only objective facts, data, statistics, quotes, paper titles, dates, authors, and direct findings.
-Do not interpret, analyze, opine, or draw any conclusions.
-Use all available tools. Be thorough and precise."""
-  temp_messages.append({"role": "user", "content": instruction})
+  You are a neutral researcher. Collect and report only objective facts, data, statistics, quotes, source titles, dates, origins, and direct findings.
+  Do not interpret, analyze, opine, or draw any conclusions.
+  Use all available tools. Be thorough and precise.
 
-  sub_chat = _build_research_subchat(temp_messages, model, temperature, max_tokens)
+  """
   try:
-    resp = sub_chat.sample()
+    client = Client(api_key=XAI_API_KEY)
+    tools_list = [web_search(), x_search()]
+    sub_chat = client.chat.create(
+      model=model,
+      temperature=temperature,
+      max_tokens=max_tokens,
+      tools=tools_list,
+      include=["verbose_streaming", "inline_citations"],
+      store_messages=True,
+    )
+    sub_chat.append(system(SYSTEM_PROMPT))
+    # Append full context from current_messages
+    for m in current_messages:
+      if m.get("role") == "user":
+        sub_chat.append(user(m.get("content")))
+      elif m.get("role") == "assistant":
+        sub_chat.append(assistant(m.get("content")))
+    # Append new task instructions
+    sub_chat.append(user(TASK_INSTRUCTIONS))
+    resp = sub_chat.sample()  # Single sample; assumes SDK handles tools
     return resp.content or "No content received."
   except Exception as e:
     if app_logger:
@@ -115,28 +138,27 @@ Use all available tools. Be thorough and precise."""
 
 
 def generate_synthesis(original_query: str, plan_summary: str, current_messages: List[Dict], model: str, temperature: float, max_tokens: int) -> str:
-  # (unchanged - long neutral synthesis)
-  temp_messages = [m.copy() for m in current_messages]
-  instruction = f"""**FINAL SYNTHESIS — COMPLETE NEUTRAL SUMMARY**
-
-You are Grok Researcher. Your role is to produce a thorough, objective, and complete synthesis of all previous task findings.
-
-Structure the response like a detailed academic paper abstract or executive summary, but significantly longer and more comprehensive:
-
-1. Begin with a one-sentence restatement of the original query.
-2. Present every key factual finding from the tasks, organized logically by topic or theme.
-3. Highlight notable facts, statistics, dates, quotes, paper titles, authors, methodologies, and results exactly as they were reported — without any interpretation.
-4. Relate the information neutrally and as-is. Do not analyze, compare, critique, or infer implications.
-5. Be exhaustive: include all significant details uncovered across every task.
-
-Do NOT add any conclusions, recommendations, opinions, or closing statements. Let the reader perform their own analysis and decision-making.
-
-Use clear, precise, neutral language. Aim for maximum completeness and factual density."""
-  temp_messages.append({"role": "user", "content": instruction})
-
-  sub_chat = _build_research_subchat(temp_messages, model, temperature, max_tokens)
   try:
-    resp = sub_chat.sample()
+    client = Client(api_key=XAI_API_KEY)
+    tools_list = [web_search(), x_search()]
+    sub_chat = client.chat.create(
+      model=model,
+      temperature=temperature,
+      max_tokens=max_tokens,
+      tools=tools_list,
+      include=["verbose_streaming", "inline_citations"],
+      store_messages=True,
+    )
+    sub_chat.append(system(SYSTEM_PROMPT))
+    # Append full context from current_messages
+    for m in current_messages:
+      if m.get("role") == "user":
+        sub_chat.append(user(m.get("content")))
+      elif m.get("role") == "assistant":
+        sub_chat.append(assistant(m.get("content")))
+    # Append synthesis instructions
+    sub_chat.append(user(SYNTHESIS_INSTRUCTIONS))
+    resp = sub_chat.sample()  # Single sample; assumes SDK handles tools
     return resp.content or "Synthesis complete."
   except Exception as e:
     if app_logger:
@@ -144,8 +166,9 @@ Use clear, precise, neutral language. Aim for maximum completeness and factual d
     return f"Synthesis error: {str(e)}"
 
 
-def perform_research_mode(original_query: str, messages: List[Dict], key: str, model: str, temperature: float, max_tokens: int) -> str:
+def perform_research_mode(original_query: str, messages: List[Dict], key: str, temperature: float, max_tokens: int) -> str:
   """Main entry point — now with full parallel task execution."""
+  model = "grok-4-0709"
   plan = generate_research_plan(original_query, model)
   tasks = plan.get("tasks", [])
   plan_summary = plan.get("research_plan_summary", "")
@@ -177,11 +200,18 @@ def perform_research_mode(original_query: str, messages: List[Dict], key: str, m
   for idx, content in results:
     # Find original task to get title
     task = next((t for t in tasks if t.get("task_id") == idx), {"title": f"Task {idx}"})
-    messages.append({"id": generate_id(), "role": "assistant", "content": f"**Task {idx}: {task.get('title', f'Task {idx}')}**\n\n{content}"})
+    task_message = {"id": generate_id(), "role": "assistant", "content": f"**Task {idx}: {task.get('title', f'Task {idx}')}**\n\n{content}"}
+    messages.append(task_message)
     save_chat(key, {"messages": messages})
 
   # === SYNTHESIS ONLY AFTER ALL TASKS FINISH ===
   synthesis = generate_synthesis(original_query, plan_summary, messages, model, temperature, max_tokens)
+
+  # Append synthesis to messages as assistant response and save
+  synthesis_message = {"id": generate_id(), "role": "assistant", "content": synthesis}
+  messages.append(synthesis_message)
+  save_chat(key, {"messages": messages})
+
   return synthesis
 
 

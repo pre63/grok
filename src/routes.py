@@ -8,7 +8,7 @@ from flask import Response, jsonify, request, send_file, send_from_directory
 
 from .api import build_xai_chat
 from .config import HASHED_PASSWORD, S3_BUCKET, SECRET_KEY, USERNAME, s3
-from .grok_researcher import perform_research_mode
+from .grok_researcher import _handle_research_streaming, perform_research_mode
 from .security import hash_password
 from .storage import delete_chat, generate_id, get_chat, list_chats, save_chat
 from .streaming import _handle_non_streaming, _handle_streaming
@@ -134,11 +134,9 @@ def register_routes(app):
     try:
       chat = get_chat(key)
       messages = chat["messages"]
-      stored_title = chat["title"]
 
     except Exception:
       messages = []
-      stored_title = None
 
     if is_new_chat:
       messages = []
@@ -156,15 +154,14 @@ def register_routes(app):
 
     # Grok Researcher
     if model == "grok-research":
-      real_model = "grok-4-1-fast-reasoning"
       user_content = next((m.get("content", "") for m in new_messages if m.get("role") == "user"), "")
-      synthesis_content = perform_research_mode(user_content, messages, key, real_model, temperature, max_tokens)
+      synthesis_content = perform_research_mode(user_content, messages, key, temperature, max_tokens)
       synthesis_msg = {"id": generate_id(), "role": "assistant", "content": synthesis_content}
       messages.append(synthesis_msg)
       save_chat(key, {"messages": messages})
 
       if stream:
-        return researcher_streaming(synthesis_content, chat_id, is_new_chat, model, cmpl_id, created)
+        return _handle_research_streaming(synthesis_content, chat_id, is_new_chat, model, cmpl_id, created)
       return jsonify(
         {
           "id": cmpl_id,
